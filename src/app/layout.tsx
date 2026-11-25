@@ -31,7 +31,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/" className="wordmark">Ballot</Link>
             <nav className="nav">
               <Link href="/polls">Past polls</Link>
-              <Link href="/admin">Admin</Link>
             </nav>
           </div>
         </header>
