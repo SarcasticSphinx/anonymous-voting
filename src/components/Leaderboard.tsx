@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Results, Standing } from "@/lib/db";
 import VotedBanner from "./VotedBanner";
@@ -9,23 +9,26 @@ import { bn } from "@/lib/format";
 const POLL_MS = 3000;
 const TIMEOUT_MS = 8000;
 
+/** A podium step lists names only up to this many people; beyond it, a summary. */
+const PODIUM_NAMES = 2;
+/** Names shown per Standings row before "+N more". */
+const ROW_NAMES = 6;
+
 /** Cheap fingerprint of everything the board shows; identical updates are ignored. */
 const signature = (r: Results) =>
   `${r.poll.status}|${r.poll.title}|${r.standings.map((s) => `${s.id}:${s.votes}`).join(",")}`;
 
 export default function Leaderboard({ initial, note }: { initial: Results; note?: string }) {
   const [data, setData] = useState(initial);
-  const [changed, setChanged] = useState<ReadonlySet<number>>(new Set());
 
   // Live updates. Invisible by design: unchanged data causes no render at all,
-  // and changed data is applied in place (see RankList / Podium).
+  // and changed data is applied in place (rows are keyed by score, names by person).
   useEffect(() => {
     const url = `/api/results/${initial.poll.id}`;
     let alive = true;
     let busy = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastSig = signature(initial);
-    let lastVotes = new Map(initial.standings.map((s) => [s.id, s.votes]));
 
     const schedule = (ms: number) => {
       clearTimeout(timer);
@@ -48,10 +51,6 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
           const sig = signature(next);
           if (alive && sig !== lastSig) {
             lastSig = sig;
-            const moved = new Set<number>();
-            for (const s of next.standings) if (lastVotes.get(s.id) !== s.votes) moved.add(s.id);
-            lastVotes = new Map(next.standings.map((s) => [s.id, s.votes]));
-            setChanged(moved);
             setData(next);
           }
         }
@@ -81,11 +80,8 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
 
   const { standings, votesCast, poll } = data;
   const open = poll.status === "open";
-  const max = Math.max(1, ...standings.map((s) => s.votes));
-
-  const ranked = useMemo(() => withRanks(standings), [standings]);
-  const lowest = useMemo(() => lowestGroup(standings), [standings]);
-  const leader = ranked[0];
+  const tiers = useMemo(() => tiersOf(standings), [standings]);
+  const top = tiers[0]?.votes ?? 0;
 
   return (
     <div className="pt-8 sm:pt-14">
@@ -102,7 +98,7 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
 
       <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-6">
         <Stat i={3} label="Votes cast" value={votesCast} />
-        <Stat i={4} label="Top score" value={leader?.votes ?? 0} />
+        <Stat i={4} label="Top score" value={top} />
       </div>
 
       {votesCast === 0 ? (
@@ -114,41 +110,15 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
         <>
           <section className="card card-pad mt-6 enter" style={{ "--i": 6 } as React.CSSProperties}>
             <div className="eyebrow mb-6">Top votes</div>
-            <Podium ranked={ranked} />
+            <Podium tiers={tiers} />
           </section>
 
           <section className="card card-pad mt-4 enter" style={{ "--i": 7 } as React.CSSProperties}>
-            <div className="eyebrow mb-4">Lowest votes</div>
-            <div className="rank-list">
-              {/* Keyed by slot, not by person: a name change crossfades instead of rebuilding the row */}
-              {lowest.shown.map((s, i) => (
-                <div key={i} className="rank-row" data-low="true">
-                  <span className="rank-bar" style={{ transform: `scaleX(${s.votes / max})` }} />
-                  <span className="rank-pos">{rankOf(ranked, s.id)}</span>
-                  <span key={s.id} className={bn(s.name, "rank-name swap")}>{s.name}</span>
-                  <span className="rank-votes"><CountUp value={s.votes} /></span>
-                </div>
-              ))}
-            </div>
-            {lowest.extra > 0 && (
-              <p className="text-sm mt-3 muted">
-                and {lowest.extra} more tied at {lowest.min} {lowest.min === 1 ? "vote" : "votes"}
-              </p>
-            )}
+            <div className="eyebrow mb-2">Standings</div>
+            <Standings tiers={tiers} max={Math.max(1, top)} />
           </section>
         </>
       )}
-
-      <section className="mt-8">
-        <div className="eyebrow mb-3 enter" style={{ "--i": 8 } as React.CSSProperties}>Full ranking</div>
-        <RankList
-          ranked={ranked}
-          max={max}
-          changed={changed}
-          topVotes={votesCast ? leader.votes : -1}
-          lowVotes={votesCast ? lowest.min : -1}
-        />
-      </section>
 
       <div className="mt-10">
         <Link href="/polls" className="link-arrow">Past polls <span aria-hidden>&rarr;</span></Link>
@@ -159,31 +129,22 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
 
 /* ---------- Pieces ---------- */
 
-type Ranked = Standing & { rank: number };
+/** One row per score: everyone with the same number of votes, in ballot order. */
+type Tier = { rank: number; votes: number; people: Standing[] };
 
-function withRanks(list: Standing[]): Ranked[] {
-  // Dense ranking: equal votes share a rank and the next score is the next
-  // number (1, 1, 2, 3). Matches the podium, where each step is one vote level.
-  let rank = 0;
-  return list.map((s, i) => {
-    if (i === 0 || s.votes !== list[i - 1].votes) rank += 1;
-    return { ...s, rank };
-  });
+function tiersOf(standings: Standing[]): Tier[] {
+  // standings arrive sorted by votes (desc), then ballot order.
+  const tiers: Tier[] = [];
+  for (const s of standings) {
+    const last = tiers[tiers.length - 1];
+    if (last && last.votes === s.votes) last.people.push(s);
+    else tiers.push({ rank: tiers.length + 1, votes: s.votes, people: [s] });
+  }
+  return tiers;
 }
 
-function rankOf(ranked: Ranked[], id: number) {
-  return ranked.find((r) => r.id === id)?.rank ?? "";
-}
-
-function lowestGroup(list: Standing[]) {
-  if (!list.length) return { shown: [], extra: 0, min: 0 };
-  const asc = [...list].reverse();
-  const min = asc[0].votes;
-  const shown = asc.slice(0, 3);
-  const tiedAtMin = list.filter((s) => s.votes === min).length;
-  const extra = Math.max(0, tiedAtMin - shown.filter((s) => s.votes === min).length);
-  return { shown, extra, min };
-}
+const votesLabel = (n: number) => (n === 1 ? "vote" : "votes");
+const peopleLabel = (n: number) => (n === 1 ? "1 person" : `${n} people`);
 
 function Stat({ label, value, i }: { label: string; value: number; i: number }) {
   return (
@@ -194,43 +155,43 @@ function Stat({ label, value, i }: { label: string; value: number; i: number }) 
   );
 }
 
-const PODIUM_NAMES = 3;
-
 /**
- * Each podium step is a vote level, not a person: everyone tied on the top
- * score stands together on step 1, the next score on step 2, and so on.
+ * Each step is a vote level (1st, 2nd and 3rd highest score). A step names
+ * at most two people; a bigger tie shows a summary instead of a wall of names
+ * (the names are in Standings right below).
  */
-function Podium({ ranked }: { ranked: Ranked[] }) {
-  const levels: { rank: number; votes: number; people: Ranked[] }[] = [];
-  for (const r of ranked) {
-    if (r.votes <= 0) break;
-    const last = levels[levels.length - 1];
-    if (last && last.votes === r.votes) last.people.push(r);
-    else if (levels.length < 3) levels.push({ rank: r.rank, votes: r.votes, people: [r] });
-    else break;
-  }
-  // Visual order: 2nd, 1st, 3rd. Slots are keyed by place, so changes update in place.
-  const slots = [levels[1], levels[0], levels[2]];
+function Podium({ tiers }: { tiers: Tier[] }) {
+  const levels = tiers.filter((t) => t.votes > 0).slice(0, 3);
+  const slots = [levels[1], levels[0], levels[2]]; // visual order: 2nd, 1st, 3rd
   const places = [2, 1, 3];
   return (
     <div className="podium">
-      {slots.map((level, i) => {
-        if (!level) return <div key={`empty-${places[i]}`} />;
-        const shown = level.people.slice(0, PODIUM_NAMES);
-        const more = level.people.length - shown.length;
+      {slots.map((t, i) => {
+        if (!t) return <div key={`empty-${places[i]}`} />;
+        const crowded = t.people.length > PODIUM_NAMES;
+        const each = t.people.length > 1 ? " each" : "";
         return (
           <div key={`place-${places[i]}`} className="podium-slot" data-place={places[i]}>
-            <div key={level.people.map((p) => p.id).join(",")} className="podium-names swap">
-              {shown.map((p) => (
-                <span key={p.id} className={bn(p.name, "podium-name")}>{p.name}</span>
-              ))}
-              {more > 0 && <span className="podium-more">+{more} more</span>}
+            <div
+              key={crowded ? `n${t.people.length}` : t.people.map((p) => p.id).join(",")}
+              className="podium-names swap"
+            >
+              {crowded ? (
+                <>
+                  <span className="podium-name">{peopleLabel(t.people.length)}</span>
+                  <span className="podium-more">tied</span>
+                </>
+              ) : (
+                t.people.map((p) => (
+                  <span key={p.id} className={bn(p.name, "podium-name")}>{p.name}</span>
+                ))
+              )}
             </div>
             <span className="podium-votes">
-              <CountUp value={level.votes} /> {level.votes === 1 ? "vote" : "votes"}
-              {level.people.length > 1 && <> each</>}
+              <CountUp value={t.votes} /> {votesLabel(t.votes)}
+              {each}
             </span>
-            <div className="podium-block">{level.rank}</div>
+            <div className="podium-block">{t.rank}</div>
           </div>
         );
       })}
@@ -238,87 +199,59 @@ function Podium({ ranked }: { ranked: Ranked[] }) {
   );
 }
 
-function RankList({
-  ranked,
-  max,
-  changed,
-  topVotes,
-  lowVotes,
-}: {
-  ranked: Ranked[];
-  max: number;
-  changed: ReadonlySet<number>;
-  topVotes: number;
-  lowVotes: number;
-}) {
-  const rows = useRef(new Map<number, HTMLDivElement>());
-  const lastTops = useRef(new Map<number, number>());
-  // Entrance stagger is fixed at first render so later re-ranks never touch it.
-  const [firstIndex] = useState(() => new Map(ranked.map((s, i) => [s.id, i])));
-
-  // Rows stay in one fixed DOM order (by id). Their on-screen order comes from
-  // the CSS `order` property, so re-ranking never moves DOM nodes — which would
-  // restart their CSS animations and look like a reload.
-  const stable = useMemo(() => [...ranked].sort((a, b) => a.id - b.id), [ranked]);
-  const position = useMemo(() => new Map(ranked.map((s, i) => [s.id, i])), [ranked]);
-  const orderKey = useMemo(() => ranked.map((s) => s.id).join(","), [ranked]);
-
-  // FLIP: when the order changes, slide each row from where it was to where it is.
-  // offsetTop ignores page scroll and in-flight transforms, so measurements stay exact.
-  useLayoutEffect(() => {
-    const tops = new Map<number, number>();
-    rows.current.forEach((el, id) => tops.set(id, el.offsetTop));
-    tops.forEach((top, id) => {
-      const before = lastTops.current.get(id);
-      const el = rows.current.get(id);
-      if (before == null || !el || before === top) return;
-      // If a previous slide is still running, start from where the row is right now.
-      let from = before - top;
-      const running = el.getAnimations().find((a) => a.id === "flip");
-      if (running) {
-        const t = getComputedStyle(el).transform;
-        if (t && t !== "none") from += new DOMMatrixReadOnly(t).m42;
-        running.cancel();
-      }
-      const anim = el.animate(
-        [{ transform: `translateY(${from}px)` }, { transform: "translateY(0)" }],
-        { duration: 700, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
-      );
-      anim.id = "flip";
+/**
+ * Standings grouped by score. Long groups show the first few names with a
+ * "+N more" toggle; the zero-vote group starts collapsed.
+ */
+function Standings({ tiers, max }: { tiers: Tier[]; max: number }) {
+  // Expanded rows are remembered by score, so live updates don't collapse them.
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
+  const toggle = (votes: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(votes)) next.delete(votes);
+      else next.add(votes);
+      return next;
     });
-    lastTops.current = tops;
-  }, [orderKey]);
 
   return (
-    <div className="rank-list">
-      {stable.map((s) => (
-        <div
-          key={s.id}
-          ref={(el) => {
-            if (el) rows.current.set(s.id, el);
-            else rows.current.delete(s.id);
-          }}
-          className="rank-row enter"
-          style={
-            {
-              order: position.get(s.id),
-              "--i": Math.min(firstIndex.get(s.id) ?? 20, 20) + 8,
-            } as React.CSSProperties
-          }
-          data-top={s.votes === topVotes && topVotes > 0}
-          data-low={s.votes === lowVotes && lowVotes !== topVotes}
-        >
-          <span className="rank-bar" style={{ transform: `scaleX(${s.votes / max})` }} />
-          <span className="rank-pos">{s.rank}</span>
-          <span className={bn(s.name, "rank-name")}>{s.name}</span>
-          <span
-            key={changed.has(s.id) ? `c${s.votes}` : "s"}
-            className={`rank-votes inline-block ${changed.has(s.id) ? "bump" : ""}`}
-          >
-            {s.votes}
-          </span>
-        </div>
-      ))}
+    <div className="tiers">
+      {tiers.map((t, i) => {
+        const isOpen = expanded.has(t.votes);
+        const cap = t.votes === 0 ? 0 : ROW_NAMES;
+        const shown = isOpen ? t.people : t.people.slice(0, cap);
+        const hidden = t.people.length - shown.length;
+        const leading = i === 0 && t.votes > 0;
+        const lowest = i === tiers.length - 1 && tiers.length > 1;
+        return (
+          <div key={t.votes} className="tier swap" data-leading={leading || undefined}>
+            <div className="tier-head">
+              <span className="tier-rank">#{t.rank}</span>
+              <span className="tier-votes">
+                <b>{t.votes}</b> {votesLabel(t.votes)}
+              </span>
+              <span className="tier-count">{peopleLabel(t.people.length)}</span>
+              {leading && <span className="tier-tag">Leading</span>}
+              {lowest && <span className="tier-tag">Lowest</span>}
+            </div>
+            <div className="tier-bar">
+              <span style={{ transform: `scaleX(${t.votes / max})` }} />
+            </div>
+            {shown.length > 0 && (
+              <div className="tier-names">
+                {shown.map((p) => (
+                  <span key={p.id} className={bn(p.name, "chip swap")}>{p.name}</span>
+                ))}
+              </div>
+            )}
+            {(hidden > 0 || (isOpen && t.people.length > cap)) && (
+              <button type="button" className="tier-more" onClick={() => toggle(t.votes)}>
+                {isOpen ? "Show less" : cap === 0 ? `Show ${hidden} names` : `+${hidden} more`}
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
