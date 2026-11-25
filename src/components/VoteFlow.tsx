@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { castVote, checkCode } from "@/app/actions";
 import { bn, CODE_LENGTH, formatCode, normalizeCode } from "@/lib/format";
@@ -32,10 +32,12 @@ export default function VoteFlow({ poll }: Props) {
     () => poll.candidates.map((c, i) => ({ ...c, n: i + 1, key: simplify(c.name) })),
     [poll.candidates],
   );
+  // Typing stays instant on slow phones: the list catches up a moment later.
+  const deferredQuery = useDeferredValue(query);
   const visible = useMemo(() => {
-    const q = simplify(query);
+    const q = simplify(deferredQuery);
     return q ? numbered.filter((c) => c.key.includes(q)) : numbered;
-  }, [numbered, query]);
+  }, [numbered, deferredQuery]);
   const selectedName = numbered.find((c) => c.id === selected)?.name;
 
   function fail(msg: string) {

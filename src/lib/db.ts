@@ -180,31 +180,50 @@ export async function hasIpVoted(pollId: string, ipHash: string) {
   return rows.length > 0;
 }
 
-export async function getResults(pollId: string): Promise<Results | null> {
+type LoadedResults = { results: Results; isPublic: boolean };
+
+// Many phones poll the same leaderboard every few seconds. Remembering the
+// answer for a moment lets them share one database query instead of one each.
+const recent = new Map<string, { at: number; value: LoadedResults | null }>();
+const SHARE_MS = 1500;
+
+/** Poll, visibility and standings in one database round trip. */
+export async function loadResults(
+  pollId: string,
+  { fresh = false }: { fresh?: boolean } = {},
+): Promise<LoadedResults | null> {
+  const hit = recent.get(pollId);
+  if (!fresh && hit && Date.now() - hit.at < SHARE_MS) return hit.value;
+
   await ensureSchema();
   const db = sql();
   const [polls, standings] = await db.transaction(
     [
-      db`SELECT id, title, status FROM polls WHERE id = ${pollId}`,
+      db`SELECT id, title, status, results_public FROM polls WHERE id = ${pollId}`,
       db`SELECT id, name, votes FROM candidates WHERE poll_id = ${pollId}
          ORDER BY votes DESC, position ASC`,
     ],
     { readOnly: true },
   );
-  const poll = polls[0] as Results["poll"] | undefined;
-  if (!poll) return null;
-  const list = standings as Standing[];
-  return {
-    poll,
-    votesCast: list.reduce((n, s) => n + s.votes, 0),
-    standings: list,
-  };
+  const row = polls[0] as (Results["poll"] & { results_public: boolean }) | undefined;
+  let value: LoadedResults | null = null;
+  if (row) {
+    const list = standings as Standing[];
+    value = {
+      isPublic: row.results_public,
+      results: {
+        poll: { id: row.id, title: row.title, status: row.status },
+        votesCast: list.reduce((n, s) => n + s.votes, 0),
+        standings: list,
+      },
+    };
+  }
+  if (recent.size > 100) recent.clear();
+  recent.set(pollId, { at: Date.now(), value });
+  return value;
 }
 
-export async function isResultsPublic(pollId: string) {
-  await ensureSchema();
-  const rows = (await sql()`SELECT results_public FROM polls WHERE id = ${pollId}`) as {
-    results_public: boolean;
-  }[];
-  return rows[0]?.results_public ?? null;
+/** Fresh results (no sharing), for full page loads. */
+export async function getResults(pollId: string): Promise<Results | null> {
+  return (await loadResults(pollId, { fresh: true }))?.results ?? null;
 }

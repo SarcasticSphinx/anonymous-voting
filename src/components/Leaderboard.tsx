@@ -6,41 +6,78 @@ import type { Results, Standing } from "@/lib/db";
 import VotedBanner from "./VotedBanner";
 import { bn } from "@/lib/format";
 
-const POLL_MS = 4000;
+const POLL_MS = 3000;
+const TIMEOUT_MS = 8000;
+
+/** Cheap fingerprint of everything the board shows; identical updates are ignored. */
+const signature = (r: Results) =>
+  `${r.poll.status}|${r.poll.title}|${r.standings.map((s) => `${s.id}:${s.votes}`).join(",")}`;
 
 export default function Leaderboard({ initial, note }: { initial: Results; note?: string }) {
   const [data, setData] = useState(initial);
-  const [changed, setChanged] = useState<Set<number>>(new Set());
-  const prev = useRef(new Map(initial.standings.map((s) => [s.id, s.votes])));
+  const [changed, setChanged] = useState<ReadonlySet<number>>(new Set());
 
-  // Live updates. Pauses while the tab is hidden to save battery and data.
+  // Live updates. Invisible by design: unchanged data causes no render at all,
+  // and changed data is applied in place (see RankList / Podium).
   useEffect(() => {
+    const url = `/api/results/${initial.poll.id}`;
     let alive = true;
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = async () => {
-      if (document.visibilityState === "visible") {
-        try {
-          const res = await fetch(`/api/results/${initial.poll.id}`, { cache: "no-store" });
-          if (res.ok && alive) {
-            const next: Results = await res.json();
+    let busy = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastSig = signature(initial);
+    let lastVotes = new Map(initial.standings.map((s) => [s.id, s.votes]));
+
+    const schedule = (ms: number) => {
+      clearTimeout(timer);
+      if (alive) timer = setTimeout(tick, ms);
+    };
+
+    async function tick() {
+      // Hidden tab: stop here. The visibilitychange listener resumes polling.
+      if (!alive || busy || document.visibilityState !== "visible") return;
+      busy = true;
+      const ctrl = new AbortController();
+      const abort = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+      let closed = false;
+      try {
+        // no-cache lets the browser revalidate with the ETag: unchanged data costs a tiny 304.
+        const res = await fetch(url, { cache: "no-cache", signal: ctrl.signal });
+        if (res.ok) {
+          const next: Results = await res.json();
+          closed = next.poll.status !== "open";
+          const sig = signature(next);
+          if (alive && sig !== lastSig) {
+            lastSig = sig;
             const moved = new Set<number>();
-            for (const s of next.standings) {
-              if (prev.current.get(s.id) !== s.votes) moved.add(s.id);
-            }
-            prev.current = new Map(next.standings.map((s) => [s.id, s.votes]));
-            if (moved.size) setChanged(moved);
+            for (const s of next.standings) if (lastVotes.get(s.id) !== s.votes) moved.add(s.id);
+            lastVotes = new Map(next.standings.map((s) => [s.id, s.votes]));
+            setChanged(moved);
             setData(next);
           }
-        } catch {}
+        }
+      } catch {
+        // Network hiccup: try again on the next tick.
+      } finally {
+        clearTimeout(abort);
+        busy = false;
       }
-      if (alive) timer = setTimeout(tick, POLL_MS);
+      if (!closed) schedule(POLL_MS); // final results never change, so polling stops
+    }
+
+    const wake = () => {
+      if (document.visibilityState === "visible") schedule(0);
     };
-    timer = setTimeout(tick, POLL_MS);
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("online", wake);
+    if (initial.poll.status === "open") schedule(POLL_MS);
+
     return () => {
       alive = false;
       clearTimeout(timer);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("online", wake);
     };
-  }, [initial.poll.id]);
+  }, [initial]);
 
   const { standings, votesCast, poll } = data;
   const open = poll.status === "open";
@@ -83,11 +120,12 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
           <section className="card card-pad mt-4 enter" style={{ "--i": 7 } as React.CSSProperties}>
             <div className="eyebrow mb-4">Lowest votes</div>
             <div className="rank-list">
-              {lowest.shown.map((s) => (
-                <div key={s.id} className="rank-row" data-low="true">
+              {/* Keyed by slot, not by person: a name change crossfades instead of rebuilding the row */}
+              {lowest.shown.map((s, i) => (
+                <div key={i} className="rank-row" data-low="true">
                   <span className="rank-bar" style={{ transform: `scaleX(${s.votes / max})` }} />
                   <span className="rank-pos">{rankOf(ranked, s.id)}</span>
-                  <span className={bn(s.name, "rank-name")}>{s.name}</span>
+                  <span key={s.id} className={bn(s.name, "rank-name swap")}>{s.name}</span>
                   <span className="rank-votes"><CountUp value={s.votes} /></span>
                 </div>
               ))}
@@ -103,7 +141,13 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
 
       <section className="mt-8">
         <div className="eyebrow mb-3 enter" style={{ "--i": 8 } as React.CSSProperties}>Full ranking</div>
-        <RankList ranked={ranked} max={max} changed={changed} topVotes={votesCast ? leader.votes : -1} lowVotes={votesCast ? lowest.min : -1} />
+        <RankList
+          ranked={ranked}
+          max={max}
+          changed={changed}
+          topVotes={votesCast ? leader.votes : -1}
+          lowVotes={votesCast ? lowest.min : -1}
+        />
       </section>
 
       <div className="mt-10">
@@ -151,22 +195,23 @@ function Stat({ label, value, i }: { label: string; value: number; i: number }) 
 
 function Podium({ ranked }: { ranked: Ranked[] }) {
   const top = ranked.slice(0, 3).filter((r) => r.votes > 0);
-  // Visual order: 2nd, 1st, 3rd
+  // Visual order: 2nd, 1st, 3rd. Slots are keyed by place, so a new leader
+  // swaps the name in place instead of rebuilding (and re-raising) the podium.
   const slots = [top[1], top[0], top[2]];
   const places = [2, 1, 3];
   return (
     <div className="podium">
       {slots.map((s, i) =>
         s ? (
-          <div key={s.id} className="podium-slot" data-place={places[i]}>
-            <span className={bn(s.name, "podium-name")}>{s.name}</span>
+          <div key={`place-${places[i]}`} className="podium-slot" data-place={places[i]}>
+            <span key={s.id} className={bn(s.name, "podium-name swap")}>{s.name}</span>
             <span className="podium-votes">
               <CountUp value={s.votes} /> {s.votes === 1 ? "vote" : "votes"}
             </span>
             <div className="podium-block">{s.rank}</div>
           </div>
         ) : (
-          <div key={`empty-${i}`} />
+          <div key={`empty-${places[i]}`} />
         ),
       )}
     </div>
@@ -182,32 +227,51 @@ function RankList({
 }: {
   ranked: Ranked[];
   max: number;
-  changed: Set<number>;
+  changed: ReadonlySet<number>;
   topVotes: number;
   lowVotes: number;
 }) {
   const rows = useRef(new Map<number, HTMLDivElement>());
   const lastTops = useRef(new Map<number, number>());
+  // Entrance stagger is fixed at first render so later re-ranks never touch it.
+  const [firstIndex] = useState(() => new Map(ranked.map((s, i) => [s.id, i])));
 
-  // FLIP: animate rows from their old position to the new one when order changes.
+  // Rows stay in one fixed DOM order (by id). Their on-screen order comes from
+  // the CSS `order` property, so re-ranking never moves DOM nodes — which would
+  // restart their CSS animations and look like a reload.
+  const stable = useMemo(() => [...ranked].sort((a, b) => a.id - b.id), [ranked]);
+  const position = useMemo(() => new Map(ranked.map((s, i) => [s.id, i])), [ranked]);
+  const orderKey = useMemo(() => ranked.map((s) => s.id).join(","), [ranked]);
+
+  // FLIP: when the order changes, slide each row from where it was to where it is.
+  // offsetTop ignores page scroll and in-flight transforms, so measurements stay exact.
   useLayoutEffect(() => {
     const tops = new Map<number, number>();
-    rows.current.forEach((el, id) => tops.set(id, el.getBoundingClientRect().top));
+    rows.current.forEach((el, id) => tops.set(id, el.offsetTop));
     tops.forEach((top, id) => {
       const before = lastTops.current.get(id);
       const el = rows.current.get(id);
       if (before == null || !el || before === top) return;
-      el.animate(
-        [{ transform: `translateY(${before - top}px)` }, { transform: "translateY(0)" }],
-        { duration: 650, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      // If a previous slide is still running, start from where the row is right now.
+      let from = before - top;
+      const running = el.getAnimations().find((a) => a.id === "flip");
+      if (running) {
+        const t = getComputedStyle(el).transform;
+        if (t && t !== "none") from += new DOMMatrixReadOnly(t).m42;
+        running.cancel();
+      }
+      const anim = el.animate(
+        [{ transform: `translateY(${from}px)` }, { transform: "translateY(0)" }],
+        { duration: 700, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
       );
+      anim.id = "flip";
     });
     lastTops.current = tops;
-  }, [ranked]);
+  }, [orderKey]);
 
   return (
     <div className="rank-list">
-      {ranked.map((s, i) => (
+      {stable.map((s) => (
         <div
           key={s.id}
           ref={(el) => {
@@ -215,14 +279,22 @@ function RankList({
             else rows.current.delete(s.id);
           }}
           className="rank-row enter"
-          style={{ "--i": Math.min(i, 20) + 8 } as React.CSSProperties}
+          style={
+            {
+              order: position.get(s.id),
+              "--i": Math.min(firstIndex.get(s.id) ?? 20, 20) + 8,
+            } as React.CSSProperties
+          }
           data-top={s.votes === topVotes && topVotes > 0}
           data-low={s.votes === lowVotes && lowVotes !== topVotes}
         >
           <span className="rank-bar" style={{ transform: `scaleX(${s.votes / max})` }} />
           <span className="rank-pos">{s.rank}</span>
           <span className={bn(s.name, "rank-name")}>{s.name}</span>
-          <span key={changed.has(s.id) ? `c${s.votes}` : "s"} className={`rank-votes inline-block ${changed.has(s.id) ? "bump" : ""}`}>
+          <span
+            key={changed.has(s.id) ? `c${s.votes}` : "s"}
+            className={`rank-votes inline-block ${changed.has(s.id) ? "bump" : ""}`}
+          >
             {s.votes}
           </span>
         </div>
@@ -231,24 +303,36 @@ function RankList({
   );
 }
 
+/**
+ * Animated number. Writes straight to the DOM on each frame instead of
+ * re-rendering React, which keeps it smooth on slow phones.
+ */
 function CountUp({ value }: { value: number }) {
-  const [shown, setShown] = useState(0);
-  const current = useRef(0);
+  const ref = useRef<HTMLSpanElement>(null);
+  const shown = useRef(0);
 
   useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const from = shown.current;
+    if (from === value) {
+      el.textContent = String(value);
+      return;
+    }
     const start = performance.now();
-    const a = current.current;
     let raf = 0;
     const step = (t: number) => {
       const p = Math.min(1, (t - start) / 900);
-      const next = Math.round(a + (value - a) * (1 - Math.pow(1 - p, 3)));
-      current.current = next;
-      setShown(next);
+      const next = Math.round(from + (value - from) * (1 - Math.pow(1 - p, 3)));
+      if (next !== shown.current) {
+        shown.current = next;
+        el.textContent = String(next);
+      }
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value]);
 
-  return <>{shown}</>;
+  return <span ref={ref}>0</span>;
 }
