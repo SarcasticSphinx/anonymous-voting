@@ -1,4 +1,4 @@
-# Ballot: anonymous class voting
+# Ballotin: anonymous class voting
 
 A small Next.js app for anonymous polls like "Best boy in the class". Voters pick one
 name, and a live leaderboard shows who has the most and the fewest votes. Nobody,
@@ -19,6 +19,10 @@ the admin included, can see who voted for whom.
    already filled in (edit `src/lib/class-names.ts` to change the default).
    Tables are created automatically the first time you sign in.
 5. Use **Copy link** on the poll and share it with the class.
+
+## Live site
+
+https://ballotin.vercel.app
 
 ## Deploy (Vercel)
 
