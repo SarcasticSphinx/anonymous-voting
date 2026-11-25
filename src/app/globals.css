@@ -426,8 +426,51 @@ textarea.input { resize: vertical; min-height: 160px; line-height: 1.55; }
   font-size: 14.5px;
 }
 
-.skeleton { border-radius: 12px; background: var(--surface-2); animation: breathe 1.4s ease-in-out infinite; }
-@keyframes breathe { 50% { opacity: 0.5; } }
+/* ============ Loader (SVG ballot box) ============ */
+.loader {
+  min-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text);
+  opacity: 0;
+  animation: loader-in 0.5s var(--ease) 0.18s forwards; /* short delay: no flash on fast loads */
+}
+@keyframes loader-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.loader svg { overflow: visible; }
+.loader svg * { stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.loader-box { fill: var(--bg); }
+.loader-slip { fill: var(--bg); animation: slip 1.8s var(--ease) infinite; }
+.loader-tick { stroke-dasharray: 1; stroke-dashoffset: 1; animation: tick 1.8s var(--ease) infinite; }
+.loader-slot { stroke-width: 2.4 !important; }
+.loader-tally { stroke: var(--muted) !important; stroke-dasharray: 1; stroke-dashoffset: 1; animation: tally 1.8s linear infinite; }
+.loader-label {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  animation: label-pulse 1.8s ease-in-out infinite;
+}
+/* slip appears above, gets ticked, then drops through the slot */
+@keyframes slip {
+  0% { transform: translateY(-10px); opacity: 0; }
+  15% { transform: translateY(0); opacity: 1; }
+  55% { transform: translateY(0); opacity: 1; }
+  85% { transform: translateY(30px); opacity: 1; }
+  100% { transform: translateY(30px); opacity: 0; }
+}
+@keyframes tick {
+  0%, 18% { stroke-dashoffset: 1; }
+  45%, 100% { stroke-dashoffset: 0; }
+}
+/* tally marks draw in as the slip lands, then reset */
+@keyframes tally {
+  0%, 80% { stroke-dashoffset: 1; }
+  95%, 100% { stroke-dashoffset: 0; }
+}
+@keyframes label-pulse { 50% { opacity: 0.45; } }
 
 /* ============ Archive list ============ */
 .archive-item {
@@ -512,4 +555,5 @@ textarea.input { resize: vertical; min-height: 160px; line-height: 1.55; }
     transition-duration: 0.01ms !important;
   }
   .lines .runner { display: none; }
+  .loader-slip, .loader-tick, .loader-tally { animation: none !important; stroke-dashoffset: 0; }
 }

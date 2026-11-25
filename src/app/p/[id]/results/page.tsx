@@ -3,14 +3,14 @@ import { getResults, isResultsPublic } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import Leaderboard from "@/components/Leaderboard";
 import Message from "@/components/Message";
-import { PollSkeleton } from "@/components/Skeletons";
+import Loader from "@/components/Loader";
 
 export const metadata = { title: "Leaderboard" };
 
 export default function ResultsPage({ params }: PageProps<"/p/[id]/results">) {
   return (
     <main className="shell shell-wide pb-24">
-      <Suspense fallback={<PollSkeleton />}>
+      <Suspense fallback={<Loader label="Counting votes" />}>
         <ResultsLoader params={params} />
       </Suspense>
     </main>

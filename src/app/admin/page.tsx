@@ -4,13 +4,14 @@ import { CLASS_NAMES } from "@/lib/class-names";
 import { listPolls } from "./actions";
 import AdminLogin from "@/components/AdminLogin";
 import AdminDashboard from "@/components/AdminDashboard";
+import Loader from "@/components/Loader";
 
 export const metadata = { title: "Admin", robots: { index: false, follow: false } };
 
 export default function AdminPage() {
   return (
     <main className="shell pb-24">
-      <Suspense fallback={<div className="skeleton mt-10" style={{ height: 320 }} />}>
+      <Suspense fallback={<Loader />}>
         <AdminGate />
       </Suspense>
     </main>

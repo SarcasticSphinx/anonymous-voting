@@ -5,12 +5,12 @@ import { getArchive, getLivePollId } from "@/lib/db";
 import { bn } from "@/lib/format";
 import PollGate from "@/components/PollGate";
 import Message from "@/components/Message";
-import { PollSkeleton } from "@/components/Skeletons";
+import Loader from "@/components/Loader";
 
 export default function Home() {
   return (
     <main className="shell shell-wide pb-40">
-      <Suspense fallback={<PollSkeleton />}>
+      <Suspense fallback={<Loader />}>
         <LivePoll />
       </Suspense>
     </main>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { getArchive } from "@/lib/db";
 import { bn } from "@/lib/format";
+import Loader from "@/components/Loader";
 
 export const metadata = { title: "Past polls" };
 
@@ -13,7 +14,7 @@ export default function PollsPage() {
         <div className="eyebrow enter">Archive</div>
         <h1 className="title-md mt-3 enter" style={{ "--i": 1 } as React.CSSProperties}>Past polls</h1>
       </div>
-      <Suspense fallback={<div className="skeleton mt-8" style={{ height: 200 }} />}>
+      <Suspense fallback={<Loader />}>
         <List />
       </Suspense>
     </main>

@@ -5,6 +5,7 @@ import { isAdmin } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { bn, formatCode } from "@/lib/format";
 import PrintButton from "@/components/PrintButton";
+import Loader from "@/components/Loader";
 import { ArrowLeft } from "@/components/icons";
 
 export const metadata = { title: "Voting codes" };
@@ -12,7 +13,7 @@ export const metadata = { title: "Voting codes" };
 export default function CodesPage({ params }: PageProps<"/admin/codes/[id]">) {
   return (
     <main className="shell shell-wide pb-24">
-      <Suspense fallback={<div className="skeleton mt-10" style={{ height: 300 }} />}>
+      <Suspense fallback={<Loader />}>
         <Codes params={params} />
       </Suspense>
     </main>
