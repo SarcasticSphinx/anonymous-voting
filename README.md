@@ -1,4 +1,4 @@
-# thap.ai: anonymous class voting
+# thapAI: anonymous class voting
 
 A small Next.js app for anonymous polls like "Best boy in the class". Voters pick one
 name, and a live leaderboard shows who has the most and the fewest votes. Nobody,

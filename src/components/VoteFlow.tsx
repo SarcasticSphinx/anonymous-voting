@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { castVote, checkCode } from "@/app/actions";
 import { bn, CODE_LENGTH, formatCode, normalizeCode } from "@/lib/format";
@@ -27,6 +27,21 @@ export default function VoteFlow({ poll }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [shake, setShake] = useState(0);
   const [pending, startTransition] = useTransition();
+
+  // The submit bar is fixed to the bottom of the screen. Reserve exactly its
+  // height (it varies with screen size, error text and the phone's home-bar area)
+  // under the list, so the last names can always be scrolled into view above it.
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barHeight, setBarHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const measure = () => setBarHeight(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [step]);
 
   const numbered = useMemo(
     () => poll.candidates.map((c, i) => ({ ...c, n: i + 1, key: simplify(c.name) })),
@@ -151,7 +166,13 @@ export default function VoteFlow({ poll }: Props) {
         </div>
       )}
 
-      <div className="confirm-bar" data-open={selected != null}>
+      <div
+        className="confirm-spacer"
+        aria-hidden
+        style={barHeight != null ? { height: barHeight + 24 } : undefined}
+      />
+
+      <div ref={barRef} className="confirm-bar" data-open={selected != null}>
         <div className="flex items-center gap-3" key={shake}>
           <div className={`min-w-0 flex-1 ${shake ? "shake" : ""}`}>
             {error ? (

@@ -9,7 +9,7 @@ const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"] });
 const bangla = Anek_Bangla({ variable: "--font-bangla", subsets: ["bengali"], preload: false });
 
 export const metadata: Metadata = {
-  title: { default: "thap.ai", template: "%s | thap.ai" },
+  title: { default: "thapAI", template: "%s | thapAI" },
   description: "Anonymous voting. No one can see who voted for whom.",
 };
 
@@ -30,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Lines />
         <header className="shell no-print">
           <div className="topbar">
-            <Link href="/" className="wordmark">thap.ai</Link>
+            <Link href="/" className="wordmark">thapAI</Link>
             <nav className="nav">
               <Link href="/polls">Past polls</Link>
             </nav>

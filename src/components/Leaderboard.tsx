@@ -162,10 +162,11 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
 type Ranked = Standing & { rank: number };
 
 function withRanks(list: Standing[]): Ranked[] {
-  // Competition ranking: ties share a rank (1, 2, 2, 4).
+  // Dense ranking: equal votes share a rank and the next score is the next
+  // number (1, 1, 2, 3). Matches the podium, where each step is one vote level.
   let rank = 0;
   return list.map((s, i) => {
-    if (i === 0 || s.votes !== list[i - 1].votes) rank = i + 1;
+    if (i === 0 || s.votes !== list[i - 1].votes) rank += 1;
     return { ...s, rank };
   });
 }
@@ -193,27 +194,46 @@ function Stat({ label, value, i }: { label: string; value: number; i: number }) 
   );
 }
 
+const PODIUM_NAMES = 3;
+
+/**
+ * Each podium step is a vote level, not a person: everyone tied on the top
+ * score stands together on step 1, the next score on step 2, and so on.
+ */
 function Podium({ ranked }: { ranked: Ranked[] }) {
-  const top = ranked.slice(0, 3).filter((r) => r.votes > 0);
-  // Visual order: 2nd, 1st, 3rd. Slots are keyed by place, so a new leader
-  // swaps the name in place instead of rebuilding (and re-raising) the podium.
-  const slots = [top[1], top[0], top[2]];
+  const levels: { rank: number; votes: number; people: Ranked[] }[] = [];
+  for (const r of ranked) {
+    if (r.votes <= 0) break;
+    const last = levels[levels.length - 1];
+    if (last && last.votes === r.votes) last.people.push(r);
+    else if (levels.length < 3) levels.push({ rank: r.rank, votes: r.votes, people: [r] });
+    else break;
+  }
+  // Visual order: 2nd, 1st, 3rd. Slots are keyed by place, so changes update in place.
+  const slots = [levels[1], levels[0], levels[2]];
   const places = [2, 1, 3];
   return (
     <div className="podium">
-      {slots.map((s, i) =>
-        s ? (
+      {slots.map((level, i) => {
+        if (!level) return <div key={`empty-${places[i]}`} />;
+        const shown = level.people.slice(0, PODIUM_NAMES);
+        const more = level.people.length - shown.length;
+        return (
           <div key={`place-${places[i]}`} className="podium-slot" data-place={places[i]}>
-            <span key={s.id} className={bn(s.name, "podium-name swap")}>{s.name}</span>
+            <div key={level.people.map((p) => p.id).join(",")} className="podium-names swap">
+              {shown.map((p) => (
+                <span key={p.id} className={bn(p.name, "podium-name")}>{p.name}</span>
+              ))}
+              {more > 0 && <span className="podium-more">+{more} more</span>}
+            </div>
             <span className="podium-votes">
-              <CountUp value={s.votes} /> {s.votes === 1 ? "vote" : "votes"}
+              <CountUp value={level.votes} /> {level.votes === 1 ? "vote" : "votes"}
+              {level.people.length > 1 && <> each</>}
             </span>
-            <div className="podium-block">{s.rank}</div>
+            <div className="podium-block">{level.rank}</div>
           </div>
-        ) : (
-          <div key={`empty-${places[i]}`} />
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
