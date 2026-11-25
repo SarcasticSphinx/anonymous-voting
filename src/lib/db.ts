@@ -101,6 +101,16 @@ export function ensureSchema() {
   return schemaReady;
 }
 
+/**
+ * Public pages never run the schema setup (it costs a database round trip on
+ * every cold start). It runs from the admin pages instead. Until then the tables
+ * don't exist, so reads treat "undefined table" as "nothing here yet".
+ */
+function isMissingSchema(err: unknown) {
+  const code = (err as { code?: string } | null)?.code;
+  return code === "42P01" || code === "42883";
+}
+
 export type Poll = {
   id: string;
   title: string;
@@ -129,11 +139,15 @@ export type Results = {
 
 /** The single live poll (the newest open one, in case older data has several). */
 export async function getLivePollId() {
-  await ensureSchema();
-  const rows = (await sql()`
-    SELECT id FROM polls WHERE status = 'open' ORDER BY created_at DESC LIMIT 1
-  `) as { id: string }[];
-  return rows[0]?.id ?? null;
+  try {
+    const rows = (await sql()`
+      SELECT id FROM polls WHERE status = 'open' ORDER BY created_at DESC LIMIT 1
+    `) as { id: string }[];
+    return rows[0]?.id ?? null;
+  } catch (err) {
+    if (isMissingSchema(err)) return null;
+    throw err;
+  }
 }
 
 export type ArchiveItem = Pick<Poll, "id" | "title" | "status" | "results_public" | "created_at"> & {
@@ -142,8 +156,8 @@ export type ArchiveItem = Pick<Poll, "id" | "title" | "status" | "results_public
 
 /** Every poll a visitor may look at: the live one plus past polls with public results. */
 export async function getArchive(): Promise<ArchiveItem[]> {
-  await ensureSchema();
-  return (await sql()`
+  try {
+    return (await sql()`
     SELECT p.id, p.title, p.status, p.results_public, p.created_at,
       (SELECT coalesce(sum(votes), 0)::int FROM candidates c WHERE c.poll_id = p.id) AS votes
     FROM polls p
@@ -151,33 +165,46 @@ export async function getArchive(): Promise<ArchiveItem[]> {
     ORDER BY (p.status = 'open') DESC, p.created_at DESC
     LIMIT 100
   `) as ArchiveItem[];
+  } catch (err) {
+    if (isMissingSchema(err)) return [];
+    throw err;
+  }
 }
 
-export async function getPollForVoting(pollId: string) {
-  await ensureSchema();
+/**
+ * Everything the ballot page needs in ONE database round trip:
+ * the poll, its names, and whether this network has already voted.
+ */
+export async function getPollForVoting(pollId: string, ipHash: string) {
   const db = sql();
-  const [polls, candidates] = await db.transaction(
-    [
-      db`SELECT id, title, status, require_code, one_per_ip, results_public, epoch
-          FROM polls WHERE id = ${pollId}`,
-      db`SELECT id, name FROM candidates WHERE poll_id = ${pollId} ORDER BY position ASC`,
-    ],
-    { readOnly: true },
-  );
+  let polls, candidates, ipRows;
+  try {
+    [polls, candidates, ipRows] = await db.transaction(
+      [
+        db`SELECT id, title, status, require_code, one_per_ip, results_public, epoch
+            FROM polls WHERE id = ${pollId}`,
+        db`SELECT id, name FROM candidates WHERE poll_id = ${pollId} ORDER BY position ASC`,
+        db`SELECT EXISTS (
+             SELECT 1 FROM voter_ips WHERE poll_id = ${pollId} AND ip_hash = ${ipHash}
+           ) AS used`,
+      ],
+      { readOnly: true },
+    );
+  } catch (err) {
+    if (isMissingSchema(err)) return null;
+    throw err;
+  }
   const poll = polls[0] as
     | (Pick<Poll, "id" | "title" | "status" | "require_code" | "one_per_ip" | "results_public"> & {
         epoch: number;
       })
     | undefined;
   if (!poll) return null;
-  return { ...poll, candidates: candidates as Candidate[] };
-}
-
-export async function hasIpVoted(pollId: string, ipHash: string) {
-  const rows = await sql()`
-    SELECT 1 FROM voter_ips WHERE poll_id = ${pollId} AND ip_hash = ${ipHash}
-  `;
-  return rows.length > 0;
+  return {
+    ...poll,
+    candidates: candidates as Candidate[],
+    ipUsed: Boolean((ipRows[0] as { used: boolean } | undefined)?.used),
+  };
 }
 
 type LoadedResults = { results: Results; isPublic: boolean };
@@ -195,16 +222,21 @@ export async function loadResults(
   const hit = recent.get(pollId);
   if (!fresh && hit && Date.now() - hit.at < SHARE_MS) return hit.value;
 
-  await ensureSchema();
   const db = sql();
-  const [polls, standings] = await db.transaction(
-    [
-      db`SELECT id, title, status, results_public FROM polls WHERE id = ${pollId}`,
-      db`SELECT id, name, votes FROM candidates WHERE poll_id = ${pollId}
-         ORDER BY votes DESC, position ASC`,
-    ],
-    { readOnly: true },
-  );
+  let polls, standings;
+  try {
+    [polls, standings] = await db.transaction(
+      [
+        db`SELECT id, title, status, results_public FROM polls WHERE id = ${pollId}`,
+        db`SELECT id, name, votes FROM candidates WHERE poll_id = ${pollId}
+           ORDER BY votes DESC, position ASC`,
+      ],
+      { readOnly: true },
+    );
+  } catch (err) {
+    if (isMissingSchema(err)) return null;
+    throw err;
+  }
   const row = polls[0] as (Results["poll"] & { results_public: boolean }) | undefined;
   let value: LoadedResults | null = null;
   if (row) {
