@@ -12,7 +12,7 @@ export const metadata = { title: "Voting codes" };
 
 export default function CodesPage({ params }: PageProps<"/admin/codes/[id]">) {
   return (
-    <main className="shell shell-wide pb-24">
+    <main className="shell pb-24">
       <Suspense fallback={<Loader />}>
         <Codes params={params} />
       </Suspense>

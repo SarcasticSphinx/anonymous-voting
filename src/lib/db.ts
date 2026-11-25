@@ -82,11 +82,11 @@ export function ensureSchema() {
                 WHERE code = p_code AND poll_id = p_poll AND used = false;
               IF NOT FOUND THEN RAISE EXCEPTION 'VOTE:bad_code'; END IF;
             END IF;
-            IF pr.one_per_ip THEN
-              INSERT INTO voter_ips (poll_id, ip_hash) VALUES (p_poll, p_ip)
-                ON CONFLICT DO NOTHING;
-              IF NOT FOUND THEN RAISE EXCEPTION 'VOTE:ip_used'; END IF;
-            END IF;
+            -- Always record the network hash: it is the proof of voting that unlocks the
+            -- leaderboard. It only blocks a second vote when the IP limit is on.
+            INSERT INTO voter_ips (poll_id, ip_hash) VALUES (p_poll, p_ip)
+              ON CONFLICT DO NOTHING;
+            IF NOT FOUND AND pr.one_per_ip THEN RAISE EXCEPTION 'VOTE:ip_used'; END IF;
             UPDATE candidates SET votes = votes + 1 WHERE id = p_cand;
             RETURN pr.epoch;
           END
@@ -207,7 +207,7 @@ export async function getPollForVoting(pollId: string, ipHash: string) {
   };
 }
 
-type LoadedResults = { results: Results; isPublic: boolean };
+type LoadedResults = { results: Results; isPublic: boolean; epoch: number };
 
 // Many phones poll the same leaderboard every few seconds. Remembering the
 // answer for a moment lets them share one database query instead of one each.
@@ -227,7 +227,7 @@ export async function loadResults(
   try {
     [polls, standings] = await db.transaction(
       [
-        db`SELECT id, title, status, results_public FROM polls WHERE id = ${pollId}`,
+        db`SELECT id, title, status, results_public, epoch FROM polls WHERE id = ${pollId}`,
         db`SELECT id, name, votes FROM candidates WHERE poll_id = ${pollId}
            ORDER BY votes DESC, position ASC`,
       ],
@@ -237,12 +237,13 @@ export async function loadResults(
     if (isMissingSchema(err)) return null;
     throw err;
   }
-  const row = polls[0] as (Results["poll"] & { results_public: boolean }) | undefined;
+  const row = polls[0] as (Results["poll"] & { results_public: boolean; epoch: number }) | undefined;
   let value: LoadedResults | null = null;
   if (row) {
     const list = standings as Standing[];
     value = {
       isPublic: row.results_public,
+      epoch: row.epoch,
       results: {
         poll: { id: row.id, title: row.title, status: row.status },
         votesCast: list.reduce((n, s) => n + s.votes, 0),
@@ -253,6 +254,14 @@ export async function loadResults(
   if (recent.size > 100) recent.clear();
   recent.set(pollId, { at: Date.now(), value });
   return value;
+}
+
+/** Has this network (IP hash) voted in the poll? */
+export async function ipHasVoted(pollId: string, ipHash: string) {
+  const rows = await sql()`
+    SELECT 1 FROM voter_ips WHERE poll_id = ${pollId} AND ip_hash = ${ipHash} LIMIT 1
+  `;
+  return rows.length > 0;
 }
 
 /** Fresh results (no sharing), for full page loads. */

@@ -63,8 +63,8 @@ export default function VoteFlow({ poll }: Props) {
       const res = await castVote(poll.id, selected, poll.requireCode ? code : null).catch(() => null);
       if (!res) return fail("Network error. Try again.");
       if (!res.ok) return fail(res.error);
-      // Marks this device as having voted. Holds no information about the choice.
-      document.cookie = `voted_${poll.id}=${res.epoch}; path=/; max-age=31536000; samesite=lax`;
+      // Signed marker: this device has voted. Holds no information about the choice.
+      document.cookie = `voted_${poll.id}=${res.token}; path=/; max-age=31536000; samesite=lax`;
       window.scrollTo({ top: 0 });
       router.push(`/p/${poll.id}/results?voted=1`);
     });
@@ -76,7 +76,7 @@ export default function VoteFlow({ poll }: Props) {
 
   if (step === "code") {
     return (
-      <div className="pt-8 sm:pt-14 max-w-md">
+      <div className="pt-8 sm:pt-14">
         {header}
         <p className="lead mt-4 enter" style={delay(2)}>
           Enter the one-time code you were given. It only unlocks the ballot and is never linked to your choice.
@@ -152,7 +152,7 @@ export default function VoteFlow({ poll }: Props) {
       )}
 
       <div className="confirm-bar" data-open={selected != null}>
-        <div className="shell shell-wide !px-0 flex items-center gap-3" key={shake}>
+        <div className="flex items-center gap-3" key={shake}>
           <div className={`min-w-0 flex-1 ${shake ? "shake" : ""}`}>
             {error ? (
               <p className="error-text !text-[13.5px] leading-snug">{error}</p>

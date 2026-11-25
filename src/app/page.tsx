@@ -9,7 +9,7 @@ import Loader from "@/components/Loader";
 
 export default function Home() {
   return (
-    <main className="shell shell-wide pb-40">
+    <main className="shell pb-40">
       <Suspense fallback={<Loader />}>
         <LivePoll />
       </Suspense>

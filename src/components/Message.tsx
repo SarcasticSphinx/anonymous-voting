@@ -12,7 +12,7 @@ export default function Message({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="pt-14 sm:pt-24 max-w-md mx-auto">
+    <div className="pt-14 sm:pt-24">
       <VotedBanner />
       <h1 className={bn(title, "title-md enter")}>{title}</h1>
       <p className="lead mt-3 enter" style={{ "--i": 1 } as React.CSSProperties}>{body}</p>

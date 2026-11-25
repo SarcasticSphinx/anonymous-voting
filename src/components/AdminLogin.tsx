@@ -23,7 +23,7 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="pt-12 sm:pt-20 max-w-sm mx-auto">
+    <div className="pt-12 sm:pt-20">
       <div className="eyebrow enter"><Lock size={14} /> Organiser</div>
       <h1 className="title-md mt-3 enter" style={{ "--i": 1 } as React.CSSProperties}>Admin sign in</h1>
       <p className="lead mt-2 enter" style={{ "--i": 2 } as React.CSSProperties}>

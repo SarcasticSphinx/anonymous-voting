@@ -9,7 +9,7 @@ const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"] });
 const bangla = Anek_Bangla({ variable: "--font-bangla", subsets: ["bengali"], preload: false });
 
 export const metadata: Metadata = {
-  title: { default: "Ballotin", template: "%s | Ballotin" },
+  title: { default: "thap.ai", template: "%s | thap.ai" },
   description: "Anonymous voting. No one can see who voted for whom.",
 };
 
@@ -28,9 +28,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${outfit.variable} ${bangla.variable}`}>
       <body>
         <Lines />
-        <header className="shell shell-wide no-print">
+        <header className="shell no-print">
           <div className="topbar">
-            <Link href="/" className="wordmark">Ballotin</Link>
+            <Link href="/" className="wordmark">thap.ai</Link>
             <nav className="nav">
               <Link href="/polls">Past polls</Link>
             </nav>

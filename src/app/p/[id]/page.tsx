@@ -6,7 +6,7 @@ export const metadata = { title: "Vote" };
 
 export default function VotePage({ params }: PageProps<"/p/[id]">) {
   return (
-    <main className="shell shell-wide pb-40">
+    <main className="shell pb-40">
       <Suspense fallback={<Loader />}>
         <Gate params={params} />
       </Suspense>

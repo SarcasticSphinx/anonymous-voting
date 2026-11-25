@@ -2,7 +2,7 @@
 
 import { sql } from "@/lib/db";
 import { CODE_LENGTH, normalizeCode } from "@/lib/format";
-import { deviceVotedEpoch, getIpHash } from "@/lib/voter";
+import { deviceVotedEpoch, getIpHash, voteToken } from "@/lib/voter";
 
 type Fail = { ok: false; error: string };
 
@@ -35,7 +35,7 @@ export async function castVote(
   pollId: string,
   candidateId: number,
   rawCode: string | null,
-): Promise<{ ok: true; epoch: number } | Fail> {
+): Promise<{ ok: true; token: string } | Fail> {
   if (typeof pollId !== "string" || !Number.isInteger(candidateId)) {
     return { ok: false, error: "Invalid request." };
   }
@@ -56,7 +56,7 @@ export async function castVote(
     return { ok: false, error: (key && MESSAGES[key]) || "Something went wrong. Try again." };
   }
 
-  // The browser stores the "voted" marker itself (see VoteFlow). Setting it here would
-  // re-render the page immediately and skip the success screen.
-  return { ok: true, epoch };
+  // The browser stores this signed "voted" marker itself (see VoteFlow), so the page
+  // isn't re-rendered before it moves to the leaderboard.
+  return { ok: true, token: voteToken(pollId, epoch) };
 }
