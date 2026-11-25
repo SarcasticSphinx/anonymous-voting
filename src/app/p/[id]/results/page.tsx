@@ -10,7 +10,7 @@ export const metadata = { title: "Leaderboard" };
 export default function ResultsPage({ params }: PageProps<"/p/[id]/results">) {
   return (
     <main className="shell shell-wide pb-24">
-      <Suspense fallback={<Loader label="Counting votes" />}>
+      <Suspense fallback={<Loader />}>
         <ResultsLoader params={params} />
       </Suspense>
     </main>

@@ -426,51 +426,37 @@ textarea.input { resize: vertical; min-height: 160px; line-height: 1.55; }
   font-size: 14.5px;
 }
 
-/* ============ Loader (SVG ballot box) ============ */
+/* ============ Loader ============ */
 .loader {
   min-height: 62vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  color: var(--text);
+  display: grid;
+  place-items: center;
   opacity: 0;
-  animation: loader-in 0.5s var(--ease) 0.18s forwards; /* short delay: no flash on fast loads */
+  animation: loader-in 0.4s var(--ease) 0.2s forwards; /* short delay: no flash on fast loads */
 }
-@keyframes loader-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.loader svg { overflow: visible; }
-.loader svg * { stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.loader-box { fill: var(--bg); }
-.loader-slip { fill: var(--bg); animation: slip 1.8s var(--ease) infinite; }
-.loader-tick { stroke-dasharray: 1; stroke-dashoffset: 1; animation: tick 1.8s var(--ease) infinite; }
-.loader-slot { stroke-width: 2.4 !important; }
-.loader-tally { stroke: var(--muted) !important; stroke-dasharray: 1; stroke-dashoffset: 1; animation: tally 1.8s linear infinite; }
-.loader-label {
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-  animation: label-pulse 1.8s ease-in-out infinite;
+@keyframes loader-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
+
+.loader-svg { animation: loader-rotate 1.6s linear infinite; }
+.loader-track,
+.loader-arc {
+  fill: none;
+  stroke-width: 2.25;
 }
-/* slip appears above, gets ticked, then drops through the slot */
-@keyframes slip {
-  0% { transform: translateY(-10px); opacity: 0; }
-  15% { transform: translateY(0); opacity: 1; }
-  55% { transform: translateY(0); opacity: 1; }
-  85% { transform: translateY(30px); opacity: 1; }
-  100% { transform: translateY(30px); opacity: 0; }
+.loader-track { stroke: var(--border); }
+.loader-arc {
+  stroke: var(--text);
+  stroke-linecap: round;
+  /* circumference of r=20 is ~125.7 */
+  stroke-dasharray: 1 126;
+  stroke-dashoffset: 0;
+  animation: loader-draw 1.4s cubic-bezier(0.45, 0, 0.25, 1) infinite;
 }
-@keyframes tick {
-  0%, 18% { stroke-dashoffset: 1; }
-  45%, 100% { stroke-dashoffset: 0; }
+@keyframes loader-rotate { to { transform: rotate(360deg); } }
+@keyframes loader-draw {
+  0% { stroke-dasharray: 1 126; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 80 126; stroke-dashoffset: -22; }
+  100% { stroke-dasharray: 1 126; stroke-dashoffset: -125; }
 }
-/* tally marks draw in as the slip lands, then reset */
-@keyframes tally {
-  0%, 80% { stroke-dashoffset: 1; }
-  95%, 100% { stroke-dashoffset: 0; }
-}
-@keyframes label-pulse { 50% { opacity: 0.45; } }
 
 /* ============ Archive list ============ */
 .archive-item {
@@ -555,5 +541,5 @@ textarea.input { resize: vertical; min-height: 160px; line-height: 1.55; }
     transition-duration: 0.01ms !important;
   }
   .lines .runner { display: none; }
-  .loader-slip, .loader-tick, .loader-tally { animation: none !important; stroke-dashoffset: 0; }
+  .loader-svg, .loader-arc { animation-duration: 2.4s !important; animation-iteration-count: infinite !important; }
 }

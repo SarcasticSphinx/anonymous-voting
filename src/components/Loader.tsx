@@ -1,24 +1,17 @@
 /**
- * Loading state: a line-drawn ballot box with a slip dropping into the slot.
- * Pure SVG + CSS. It fades in after a short delay so fast loads never flash it.
+ * Loading state: a thin ring with an arc that continuously draws, extends and
+ * retracts while rotating. Pure SVG + CSS. Fades in after a short delay so
+ * fast loads never flash it.
  */
-export default function Loader({ label = "Loading" }: { label?: string }) {
+export default function Loader() {
   return (
-    <div className="loader" role="status" aria-live="polite">
-      <svg viewBox="0 0 64 64" width="64" height="64" fill="none" aria-hidden>
-        {/* The slip: drawn first so the box body covers it as it drops in */}
-        <g className="loader-slip">
-          <rect x="22" y="4" width="20" height="24" rx="2.5" />
-          <path className="loader-tick" d="M27 16.5l3.6 3.6L37 13.5" pathLength={1} />
-        </g>
-        {/* Box body, filled with the page colour so it hides the slip */}
-        <rect className="loader-box" x="8" y="30" width="48" height="28" rx="5" />
-        {/* Slot */}
-        <path className="loader-slot" d="M18 30h28" />
-        {/* Tally marks on the box front */}
-        <path className="loader-tally" d="M22 41v8M27 41v8M32 41v8M37 41v8M19 48l22-6" pathLength={1} />
+    <div className="loader" role="status" aria-label="Loading">
+      <svg className="loader-svg" viewBox="0 0 50 50" width="44" height="44" aria-hidden>
+        {/* Backing disc so the background lines don't run through the ring */}
+        <circle cx="25" cy="25" r="25" fill="var(--bg)" />
+        <circle className="loader-track" cx="25" cy="25" r="20" />
+        <circle className="loader-arc" cx="25" cy="25" r="20" />
       </svg>
-      <span className="loader-label">{label}</span>
     </div>
   );
 }
