@@ -17,7 +17,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/results/[id]">) 
     if (!(await isAdmin())) {
       if (!loaded.isPublic) return json({ error: "hidden" }, 403);
       // While voting is open, only people who have voted may see the standings.
-      if (loaded.results.poll.status === "open" && !(await viewerHasVoted(id, loaded.epoch))) {
+      if (loaded.results.poll.status === "open" && !(await viewerHasVoted(id, loaded.epoch, loaded.onePerIp))) {
         return json({ error: "vote_first" }, 403);
       }
     }

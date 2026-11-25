@@ -173,7 +173,7 @@ export default function VoteFlow({ poll }: Props) {
       />
 
       <div ref={barRef} className="confirm-bar" data-open={selected != null}>
-        <div className="flex items-center gap-3" key={shake}>
+        <div className="shell flex items-center gap-3" key={shake}>
           <div className={`min-w-0 flex-1 ${shake ? "shake" : ""}`}>
             {error ? (
               <p className="error-text !text-[13.5px] leading-snug">{error}</p>

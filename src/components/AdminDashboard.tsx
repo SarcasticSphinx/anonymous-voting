@@ -79,7 +79,7 @@ function NewPoll({
 }) {
   const [title, setTitle] = useState("");
   const [names, setNames] = useState(defaultNames);
-  const [onePerIp, setOnePerIp] = useState(true);
+  const [onePerIp, setOnePerIp] = useState(false);
   const [requireCode, setRequireCode] = useState(false);
   const count = names.split(/\r?\n/).filter((n) => n.trim()).length;
   const [codes, setCodes] = useState<number | "">("");
@@ -133,7 +133,7 @@ function NewPoll({
       <div className="flex flex-col gap-1 mt-5">
         <Toggle
           label="One vote per network (IP)"
-          hint="Blocks a second vote from the same internet connection. People on the same Wi-Fi share one IP, so only one of them could vote."
+          hint="Leave this off if people vote on the same Wi-Fi (university, office, hostel): they all share one IP, so only the first person could vote. Each device can always vote only once."
           checked={onePerIp}
           onChange={setOnePerIp}
         />
@@ -253,6 +253,7 @@ function PollCard({
         />
         <Toggle
           label="One vote per network (IP)"
+          hint={poll.one_per_ip ? "On a shared Wi-Fi only the first person can vote." : undefined}
           checked={poll.one_per_ip}
           disabled={pending}
           onChange={(v) => run(() => updateSetting(poll.id, "one_per_ip", v), v ? "IP limit on" : "IP limit off")}

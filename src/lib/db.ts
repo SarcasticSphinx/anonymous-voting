@@ -43,7 +43,7 @@ export function ensureSchema() {
           status text NOT NULL DEFAULT 'open',
           results_public boolean NOT NULL DEFAULT true,
           require_code boolean NOT NULL DEFAULT false,
-          one_per_ip boolean NOT NULL DEFAULT true,
+          one_per_ip boolean NOT NULL DEFAULT false,
           epoch int NOT NULL DEFAULT 0,
           created_at timestamptz NOT NULL DEFAULT now()
         )`,
@@ -207,7 +207,7 @@ export async function getPollForVoting(pollId: string, ipHash: string) {
   };
 }
 
-type LoadedResults = { results: Results; isPublic: boolean; epoch: number };
+type LoadedResults = { results: Results; isPublic: boolean; epoch: number; onePerIp: boolean };
 
 // Many phones poll the same leaderboard every few seconds. Remembering the
 // answer for a moment lets them share one database query instead of one each.
@@ -227,7 +227,7 @@ export async function loadResults(
   try {
     [polls, standings] = await db.transaction(
       [
-        db`SELECT id, title, status, results_public, epoch FROM polls WHERE id = ${pollId}`,
+        db`SELECT id, title, status, results_public, epoch, one_per_ip FROM polls WHERE id = ${pollId}`,
         db`SELECT id, name, votes FROM candidates WHERE poll_id = ${pollId}
            ORDER BY votes DESC, position ASC`,
       ],
@@ -237,13 +237,16 @@ export async function loadResults(
     if (isMissingSchema(err)) return null;
     throw err;
   }
-  const row = polls[0] as (Results["poll"] & { results_public: boolean; epoch: number }) | undefined;
+  const row = polls[0] as
+    | (Results["poll"] & { results_public: boolean; epoch: number; one_per_ip: boolean })
+    | undefined;
   let value: LoadedResults | null = null;
   if (row) {
     const list = standings as Standing[];
     value = {
       isPublic: row.results_public,
       epoch: row.epoch,
+      onePerIp: row.one_per_ip,
       results: {
         poll: { id: row.id, title: row.title, status: row.status },
         votesCast: list.reduce((n, s) => n + s.votes, 0),

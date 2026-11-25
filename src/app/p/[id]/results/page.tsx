@@ -29,7 +29,7 @@ async function ResultsLoader({ params }: { params: PageProps<"/p/[id]/results">[
       return <Message title="Results are hidden" body="The organiser will reveal the leaderboard when voting ends." />;
     }
     // While voting is open, no vote means no leaderboard: show the ballot instead.
-    if (loaded.results.poll.status === "open" && !(await viewerHasVoted(id, loaded.epoch))) {
+    if (loaded.results.poll.status === "open" && !(await viewerHasVoted(id, loaded.epoch, loaded.onePerIp))) {
       return <PollGate pollId={id} />;
     }
   }

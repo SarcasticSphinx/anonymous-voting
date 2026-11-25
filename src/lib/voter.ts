@@ -44,11 +44,15 @@ export async function deviceVotedEpoch(pollId: string) {
 }
 
 /**
- * Has this viewer voted in the current round? Either proof works:
- * a genuine device marker (covers phones whose IP changes on mobile data),
- * or this network's IP hash recorded for the poll.
+ * Has this viewer voted in the current round?
+ * - A genuine device marker always counts (it also covers phones whose IP
+ *   changes on mobile data).
+ * - The network's IP hash counts only when the poll's IP limit is on. When it is
+ *   off (e.g. a whole campus shares one IP), one person's vote must not unlock
+ *   the leaderboard for everyone else on the same Wi-Fi.
  */
-export async function viewerHasVoted(pollId: string, epoch: number) {
+export async function viewerHasVoted(pollId: string, epoch: number, onePerIp: boolean) {
   if ((await deviceVotedEpoch(pollId)) === epoch) return true;
+  if (!onePerIp) return false;
   return ipHasVoted(pollId, await getIpHash(pollId));
 }
