@@ -46,7 +46,7 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-outfit);
+  --font-sans: var(--font-outfit), var(--font-bangla);
 }
 
 /* ============ Base ============ */
@@ -56,7 +56,7 @@ body {
   /* No background here: the page colour comes from <html>, so the fixed SVG lines
      (z-index -1) are not painted over. */
   color: var(--text);
-  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-family: var(--font-outfit), var(--font-bangla), system-ui, sans-serif;
   min-height: 100dvh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -497,6 +497,11 @@ textarea.input { resize: vertical; min-height: 160px; line-height: 1.55; }
   body { background: #fff; }
   .slips { grid-template-columns: repeat(3, 1fr); gap: 6px; }
 }
+
+/* ============ Bangla ============ */
+/* Tight tracking squeezes Bangla conjuncts, so Bangla text gets normal spacing and a bit more line height. */
+.bn { letter-spacing: 0 !important; line-height: 1.3; }
+.title.bn, .title-md.bn { line-height: 1.25; }
 
 /* ============ Accessibility ============ */
 :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }

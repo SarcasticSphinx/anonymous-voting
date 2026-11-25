@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { castVote, checkCode } from "@/app/actions";
-import { CODE_LENGTH, formatCode, normalizeCode } from "@/lib/format";
+import { bn, CODE_LENGTH, formatCode, normalizeCode } from "@/lib/format";
 import { ArrowRight, Search } from "./icons";
 
 type Props = {
@@ -15,7 +15,7 @@ type Props = {
   };
 };
 
-const simplify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+const simplify = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{M}\p{N}]/gu, "");
 const delay = (i: number) => ({ "--i": i }) as React.CSSProperties;
 
 export default function VoteFlow({ poll }: Props) {
@@ -69,7 +69,7 @@ export default function VoteFlow({ poll }: Props) {
   }
 
   const header = (
-    <h1 className="title enter" style={delay(1)}>{poll.title}</h1>
+    <h1 className={bn(poll.title, "title enter")} style={delay(1)}>{poll.title}</h1>
   );
 
   if (step === "code") {
@@ -143,7 +143,7 @@ export default function VoteFlow({ poll }: Props) {
               }}
             >
               <span className="pick-num">{selected === c.id ? <CheckSmall /> : c.n}</span>
-              <span className="pick-name">{c.name}</span>
+              <span className={bn(c.name, "pick-name")}>{c.name}</span>
             </button>
           ))}
         </div>

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { getArchive, getLivePollId } from "@/lib/db";
+import { bn } from "@/lib/format";
 import PollGate from "@/components/PollGate";
 import Message from "@/components/Message";
 import { PollSkeleton } from "@/components/Skeletons";
@@ -33,7 +34,7 @@ async function LivePoll() {
           <div className="eyebrow mb-1">Past polls</div>
           {past.map((p) => (
             <Link key={p.id} href={`/p/${p.id}/results`} className="archive-item">
-              <span className="font-medium">{p.title}</span>
+              <span className={bn(p.title, "font-medium")}>{p.title}</span>
               <span className="muted text-sm">{p.votes} votes</span>
             </Link>
           ))}

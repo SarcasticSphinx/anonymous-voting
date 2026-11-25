@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { getArchive } from "@/lib/db";
+import { bn } from "@/lib/format";
 
 export const metadata = { title: "Past polls" };
 
@@ -38,7 +39,7 @@ async function List() {
             style={{ "--i": i + 2 } as React.CSSProperties}
           >
             <span className="min-w-0">
-              <span className="block font-medium text-[17px] leading-snug">{p.title}</span>
+              <span className={bn(p.title, "block font-medium text-[17px] leading-snug")}>{p.title}</span>
               <span className="block muted text-sm mt-0.5">
                 {fmt.format(new Date(p.created_at))} · {p.votes} {p.votes === 1 ? "vote" : "votes"}
               </span>

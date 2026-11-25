@@ -3,7 +3,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { isAdmin } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { formatCode } from "@/lib/format";
+import { bn, formatCode } from "@/lib/format";
 import PrintButton from "@/components/PrintButton";
 import { ArrowLeft } from "@/components/icons";
 
@@ -50,7 +50,7 @@ async function Codes({ params }: { params: PageProps<"/admin/codes/[id]">["param
       <div className="no-print flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <Link href="/admin" className="eyebrow hover:opacity-80"><ArrowLeft size={14} /> Dashboard</Link>
-          <h1 className="title-md mt-3">{title}</h1>
+          <h1 className={bn(title, "title-md mt-3")}>{title}</h1>
           <p className="lead text-sm mt-1">
             {list.length} unused codes. Cut them out, shuffle, and hand them out at random.
           </p>

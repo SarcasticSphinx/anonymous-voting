@@ -12,6 +12,7 @@ import {
   updateSetting,
 } from "@/app/admin/actions";
 import { Chart, Link2, Plus, Printer, Refresh, Trash } from "./icons";
+import { bn } from "@/lib/format";
 
 type Props = { polls: PollSummary[]; defaultNames: string };
 
@@ -216,7 +217,7 @@ function PollCard({
     <article className="card card-pad enter" style={{ "--i": i } as React.CSSProperties} aria-busy={pending}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold tracking-tight leading-snug">{poll.title}</h2>
+          <h2 className={bn(poll.title, "text-lg font-semibold tracking-tight leading-snug")}>{poll.title}</h2>
           <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
             {poll.candidates} names · {poll.votes} {poll.votes === 1 ? "vote" : "votes"}
             {poll.require_code && ` · ${poll.used}/${poll.codes} codes used`}

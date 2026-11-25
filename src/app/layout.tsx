@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit } from "next/font/google";
+import { Anek_Bangla, Outfit } from "next/font/google";
 import Link from "next/link";
 import Lines from "@/components/Lines";
 import "./globals.css";
 
 const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"] });
+// Bangla glyphs. Not preloaded: the browser only downloads it when Bangla text is on screen.
+const bangla = Anek_Bangla({ variable: "--font-bangla", subsets: ["bengali"], preload: false });
 
 export const metadata: Metadata = {
   title: { default: "Ballotin", template: "%s | Ballotin" },
@@ -23,7 +25,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={outfit.variable}>
+    <html lang="en" className={`${outfit.variable} ${bangla.variable}`}>
       <body>
         <Lines />
         <header className="shell shell-wide no-print">

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Results, Standing } from "@/lib/db";
 import VotedBanner from "./VotedBanner";
+import { bn } from "@/lib/format";
 
 const POLL_MS = 4000;
 
@@ -58,7 +59,7 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
         <span className="live-dot" data-closed={!open} />
         {open ? "Live results" : "Final results"}
       </span>
-      <h1 className="title mt-5 enter" style={{ "--i": 2 } as React.CSSProperties}>
+      <h1 className={bn(poll.title, "title mt-5 enter")} style={{ "--i": 2 } as React.CSSProperties}>
         {poll.title}
       </h1>
 
@@ -86,7 +87,7 @@ export default function Leaderboard({ initial, note }: { initial: Results; note?
                 <div key={s.id} className="rank-row" data-low="true">
                   <span className="rank-bar" style={{ transform: `scaleX(${s.votes / max})` }} />
                   <span className="rank-pos">{rankOf(ranked, s.id)}</span>
-                  <span className="rank-name">{s.name}</span>
+                  <span className={bn(s.name, "rank-name")}>{s.name}</span>
                   <span className="rank-votes"><CountUp value={s.votes} /></span>
                 </div>
               ))}
@@ -158,7 +159,7 @@ function Podium({ ranked }: { ranked: Ranked[] }) {
       {slots.map((s, i) =>
         s ? (
           <div key={s.id} className="podium-slot" data-place={places[i]}>
-            <span className="podium-name">{s.name}</span>
+            <span className={bn(s.name, "podium-name")}>{s.name}</span>
             <span className="podium-votes">
               <CountUp value={s.votes} /> {s.votes === 1 ? "vote" : "votes"}
             </span>
@@ -220,7 +221,7 @@ function RankList({
         >
           <span className="rank-bar" style={{ transform: `scaleX(${s.votes / max})` }} />
           <span className="rank-pos">{s.rank}</span>
-          <span className="rank-name">{s.name}</span>
+          <span className={bn(s.name, "rank-name")}>{s.name}</span>
           <span key={changed.has(s.id) ? `c${s.votes}` : "s"} className={`rank-votes inline-block ${changed.has(s.id) ? "bump" : ""}`}>
             {s.votes}
           </span>
